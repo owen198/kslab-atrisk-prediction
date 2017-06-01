@@ -22,26 +22,20 @@ datasets_index = 0
 for dataset_name in datasets_name:
 	datasets = pd.read_csv('../data/' + dataset_name + '.csv', sep=',')
 
-	datasets = datasets.loc[(((datasets.video_sum_count - datasets.video_sum_count.mean()) / datasets.video_sum_count.std()).abs() < 1.5)
-				& (((datasets.active_sum_count - datasets.active_sum_count.mean()) / datasets.active_sum_count.std()).abs() < 1)
-				& (((datasets.final_score - datasets.final_score.mean()) / datasets.final_score.std()) < 0.8)]
-	print(len(datasets))
 
 
 	online_features_begin_index = 1
 	online_features_end_index = 21
 
-
 	features_header = list(datasets)[online_features_begin_index : online_features_end_index + 1]
 	online_features_val = datasets[features_header].values
-
 
 
 	label_header = 'final_score'
 	label_val = datasets[label_header].values
 
 	number_of_folds = 10
-	total_features = 20
+	total_features = 21
 
 
 
@@ -58,15 +52,6 @@ for dataset_name in datasets_name:
 		for train_index, test_index in kfold.split(online_features_val):
 			online_features_val_train, online_features_val_test = online_features_val[train_index], online_features_val[test_index]
 			label_val_train, label_val_test = label_val[train_index], label_val[test_index]
-
-			
-			"""
-			min_max_scaler = preprocessing.MinMaxScaler()
-			min_max_scaler.fit(online_features_val_train)
-			online_features_val_train = min_max_scaler.transform(online_features_val_train)
-			online_features_val_test = min_max_scaler.transform(online_features_val_test)
-			"""
-
 
 			
 
@@ -87,8 +72,8 @@ for dataset_name in datasets_name:
 				#處理預測值超過不合理範圍
 
 
-				#pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / label_val_test))
-				pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / np.mean(label_val)))
+				pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / label_val_test))
+				#pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / np.mean(label_val)))
 				pMSE = np.mean((label_val_predict_online - label_val_test) ** 2)
 				metrics_list.append([evaluation_num, kfold_split_num, number_of_comp, pMAPC, pMSE])
 
@@ -105,7 +90,10 @@ for dataset_name in datasets_name:
 	all_datasets_metrics.append(metrics_dataframe)
 
 
+
 	datasets_index = datasets_index + 1
+
+
 
 
 
@@ -162,6 +150,7 @@ all_datasets_pMPAC = []
 for i in all_datasets_metrics:
 	all_datasets_pMSE.append(i['pMSE'].values)
 	all_datasets_pMPAC.append(i['pMAPC'].values)
+
 
 
 generate_boxplot(all_datasets_pMSE, 'pMSE Comparison between different datasets', datasets_small_name)
