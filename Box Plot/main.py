@@ -8,13 +8,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from scipy.stats import wilcoxon
+import statsmodels.api as sm
+from statsmodels.stats.stattools import durbin_watson
 from func import *
 
 
 
 
 all_datasets_metrics = []
-online_offline_all_datasets_metrics = []
+blended_offline_all_datasets_metrics = []
 datasets_name = ['ncu_data_week_1-6(1a)', 'ncu_data_week_1-12(2a)', 'ncu_data_week_1-18(3a)', 'ncu_data_week_7-12(2d)', 'ncu_data_week_13-18(3d)']
 datasets_small_name = ['1a', '2a', '3a', '2d', '3d']
 datasets_index = 0
@@ -24,57 +26,74 @@ for dataset_name in datasets_name:
 
 
 
-	online_features_begin_index = 1
-	online_features_end_index = 21
+	blended_features_begin_index = 1
+	blended_features_end_index = 21
 
-	features_header = list(datasets)[online_features_begin_index : online_features_end_index + 1]
-	online_features_val = datasets[features_header].values
+	features_header = list(datasets)[blended_features_begin_index : blended_features_end_index + 1]
+	blended_features_val = datasets[features_header].values
 
 
 	label_header = 'final_score'
 	label_val = datasets[label_header].values
 
+	
+	total_features = blended_features_end_index - blended_features_begin_index + 1
+
 	number_of_folds = 10
-	total_features = 21
+	number_of_cv_evaluation = 100
 
-
-
-	number_of_cv_evaluation = 20
 
 	metrics_list = []
-	online_metrics_list = []
-	offline_metrics_list = []
+
+	regression_metrics_list = []
+
+	for number_of_comp in range(1, total_features + 1):
+		pca = PCA(n_components=number_of_comp)
+		pca.fit(blended_features_val)
+		blended_features_pca_val = pca.transform(blended_features_val)
+
+		blended_features_pca_val = sm.add_constant(blended_features_pca_val) #sklearn 預設有加入截距，statsmodels沒有，所以要加
+		results = sm.OLS(label_val, blended_features_pca_val).fit()
+		dw = durbin_watson(results.resid)
+		r2 = results.rsquared
+		r2_adj = results.rsquared_adj
+		fvalue = results.fvalue
+		f_pvalue = results.f_pvalue
+		regression_metrics_list.append([number_of_comp, r2, r2_adj, fvalue, f_pvalue, dw])
+	regression_metrics_df = pd.DataFrame(regression_metrics_list, columns=['number_of_comp', 'r2', 'r2_adj', 'fvalue', 'f_pvalue', 'durbin_watson'])
+
+
 
 	for evaluation_num in range(1, number_of_cv_evaluation + 1):
 		kfold = KFold(n_splits=number_of_folds, shuffle=True)
 		kfold_split_num = 1
 
-		for train_index, test_index in kfold.split(online_features_val):
-			online_features_val_train, online_features_val_test = online_features_val[train_index], online_features_val[test_index]
+		for train_index, test_index in kfold.split(blended_features_val):
+			blended_features_val_train, blended_features_val_test = blended_features_val[train_index], blended_features_val[test_index]
 			label_val_train, label_val_test = label_val[train_index], label_val[test_index]
 
 			
 
 			for number_of_comp in range(1, total_features + 1):
 				pca = PCA(n_components=number_of_comp)
-				pca.fit(online_features_val_train)
-				online_features_pca_val_train = pca.transform(online_features_val_train)
+				pca.fit(blended_features_val_train)
+				blended_features_pca_val_train = pca.transform(blended_features_val_train)
 				MLR = linear_model.LinearRegression()
-				MLR.fit(online_features_pca_val_train, label_val_train)
-				online_features_pca_val_test = pca.transform(online_features_val_test)
-				label_val_predict_online = MLR.predict(online_features_pca_val_test)
+				MLR.fit(blended_features_pca_val_train, label_val_train)
+				blended_features_pca_val_test = pca.transform(blended_features_val_test)
+				label_val_predict_blended = MLR.predict(blended_features_pca_val_test)
 				#處理預測值超過不合理範圍
-				for i in range(len(label_val_predict_online)):
-					if label_val_predict_online[i] > 104.16:
-						label_val_predict_online[i] = 104.16
-					elif label_val_predict_online[i] < 0:
-						label_val_predict_online[i] = 0.0
+				for i in range(len(label_val_predict_blended)):
+					if label_val_predict_blended[i] > 104.16:
+						label_val_predict_blended[i] = 104.16
+					elif label_val_predict_blended[i] < 0:
+						label_val_predict_blended[i] = 0.0
 				#處理預測值超過不合理範圍
 
 
-				pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / label_val_test))
-				#pMAPC = 1 - np.mean(abs((label_val_predict_online - label_val_test) / np.mean(label_val)))
-				pMSE = np.mean((label_val_predict_online - label_val_test) ** 2)
+				#pMAPC = 1 - np.mean(abs((label_val_predict_blended - label_val_test) / label_val_test))
+				pMAPC = 1 - np.mean(abs((label_val_predict_blended - label_val_test) / np.mean(label_val)))
+				pMSE = np.mean((label_val_predict_blended - label_val_test) ** 2)
 				metrics_list.append([evaluation_num, kfold_split_num, number_of_comp, pMAPC, pMSE])
 
 
@@ -86,10 +105,12 @@ for dataset_name in datasets_name:
 	metrics_dataframe = metrics_dataframe.drop('evaluation_num', 1)
 	metrics_dataframe = metrics_dataframe.drop('kfold_split_num', 1)
 
-
+	
 	all_datasets_metrics.append(metrics_dataframe)
 
 
+	predictive_regression_metrics_df = metrics_dataframe.merge(regression_metrics_df, left_on=["number_of_comp"], right_on=["number_of_comp"], how='inner')
+	predictive_regression_metrics_df.to_csv('result/PCR_' + datasets_small_name[datasets_index] + '.csv', index=False)
 
 	datasets_index = datasets_index + 1
 
@@ -157,9 +178,3 @@ generate_boxplot(all_datasets_pMSE, 'pMSE Comparison between different datasets'
 generate_boxplot(all_datasets_pMPAC, 'pMAPC Comparison between different datasets', datasets_small_name)
 #boxplot of pMSE and pMAPC
 
-
-
-index = 0
-for i in all_datasets_metrics:
-	i.to_csv('result/PCR_' + datasets_small_name[index] + '.csv', index=False)
-	index = index + 1
