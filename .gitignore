@@ -101,4 +101,4 @@ ENV/
 .mypy_cache/
 
 # test result
-test/result/
+test/result
