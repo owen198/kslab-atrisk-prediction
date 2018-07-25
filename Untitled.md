@@ -2,10 +2,20 @@
 
 ```python
 !pip3 install scipy
+!pip3 install xgboost
 ```
 
     Requirement already satisfied (use --upgrade to upgrade): scipy in /usr/local/lib/python3.5/dist-packages
     Requirement already satisfied (use --upgrade to upgrade): numpy>=1.8.2 in /usr/local/lib/python3.5/dist-packages (from scipy)
+    [33mYou are using pip version 8.1.1, however version 18.0 is available.
+    You should consider upgrading via the 'pip install --upgrade pip' command.[0m
+    Collecting xgboost
+      Downloading https://files.pythonhosted.org/packages/06/7a/442f7da21792566012e5c7e5a7dffa44c1b6cc05c0c27856bbc8a7718b28/xgboost-0.72.1-py2.py3-none-manylinux1_x86_64.whl (18.4MB)
+    [K    100% |████████████████████████████████| 18.4MB 59kB/s eta 0:00:01    16% |█████▏                          | 3.0MB 3.4MB/s eta 0:00:05    21% |███████                         | 4.0MB 3.6MB/s eta 0:00:05    37% |████████████▏                   | 7.0MB 5.2MB/s eta 0:00:03    51% |████████████████▌               | 9.5MB 4.7MB/s eta 0:00:02
+    [?25hRequirement already satisfied (use --upgrade to upgrade): scipy in /usr/local/lib/python3.5/dist-packages (from xgboost)
+    Requirement already satisfied (use --upgrade to upgrade): numpy in /usr/local/lib/python3.5/dist-packages (from xgboost)
+    Installing collected packages: xgboost
+    Successfully installed xgboost-0.72.1
     [33mYou are using pip version 8.1.1, however version 18.0 is available.
     You should consider upgrading via the 'pip install --upgrade pip' command.[0m
 
@@ -395,10 +405,12 @@ kyoto_df_2.head(5)
 ```python
 from sklearn.model_selection import train_test_split  
 
-x_train = kyoto_df_1[list(kyoto_df_1)[0:-2]]
+features = -3
+
+x_train = kyoto_df_1[list(kyoto_df_1)[0:features]]
 y_train = kyoto_df_1[list(kyoto_df_1)[-1]]
 
-x_test = kyoto_df_2[list(kyoto_df_2)[0:-2]]
+x_test = kyoto_df_2[list(kyoto_df_2)[0:features]]
 y_test = kyoto_df_2[list(kyoto_df_2)[-1]]
 
 #x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.20) 
@@ -427,26 +439,96 @@ svclassifier.fit(x_train, y_train)
 from sklearn.metrics import accuracy_score
 
 y_pred = svclassifier.predict(x_test) 
-acc = accuracy_score(y_test, y_pred)
-acc
+acc_ext = accuracy_score(y_test, y_pred)
+
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_pred)
+auc = metrics.auc(fpr, tpr)
+
+print (acc_ext, auc)
+```
+
+    0.6 0.5584239130434783
+
+
+
+```python
+y_pred = svclassifier.predict(x_train) 
+acc_int = accuracy_score(y_train, y_pred)
+acc_int
 ```
 
 
 
 
-    0.7090909090909091
+    0.7169811320754716
 
 
 
 
 ```python
-PAD = 2 * (1 - acc)
+err = 1 - acc_ext
+PAD = 2 * (1 - 2 * err)
 PAD
 ```
 
 
 
 
-    0.5818181818181818
+    0.3999999999999999
 
+
+
+
+```python
+err = 1 - acc_int
+PAD = 2 * (1 - 2 * err)
+PAD
+```
+
+
+
+
+    0.8679245283018866
+
+
+
+# Xgboost
+
+
+```python
+import datetime
+import time
+import pandas as pd
+#from influxdb import DataFrameClient
+from sklearn.externals import joblib
+import numpy as np
+import collections
+from xgboost.sklearn import XGBClassifier
+from pathlib import Path
+from sklearn import metrics
+```
+
+
+```python
+xgb1 = XGBClassifier()
+
+xgb1.fit(x_train, y_train, eval_metric='auc')
+
+#display results
+y_pred = xgb1.predict(x_test)
+
+acc_xgb = accuracy_score(y_test, y_pred)
+
+fpr, tpr, thresholds = metrics.roc_curve(y_test, y_pred)
+auc = metrics.auc(fpr, tpr)
+
+print (acc_xgb, auc)
+
+```
+
+    0.6727272727272727 0.6331521739130435
+
+
+    /usr/local/lib/python3.5/dist-packages/sklearn/preprocessing/label.py:151: DeprecationWarning: The truth value of an empty array is ambiguous. Returning False, but in future this will result in an error. Use `array.size > 0` to check that an array is not empty.
+      if diff:
 
